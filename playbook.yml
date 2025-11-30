@@ -20,7 +20,7 @@
         group: root
         mode: '0600'
       when: inventory_hostname == groups['rke2'][0]
-    - name: Install RKE2 sevrer on first node
+    - name: Download RKE2 binary on nodes
       ansible.builtin.shell:
           cmd:  curl -sfL https://get.rke2.io | sh 
           creates: /usr/local/bin/rke2
@@ -44,3 +44,39 @@
           name: rke2-server
           state: started
       when: inventory_hostname != groups['rke2'][0]
+    - name:  Add the Jetstack Helm repository
+      ansible.builtin.shell:
+        cmd: helm repo add jetstack https://charts.jetstack.io
+      environment:
+        KUBECONFIG: "/etc/rancher/rke2/rke2.yaml"
+        PATH: "/var/lib/rancher/rke2/bin:{{ ansible_env.PATH }}"
+      when: inventory_hostname == groups['rke2'][0]
+    - name: Create cattle-system namespace
+      ansible.builtin.shell:
+        cmd: /var/lib/rancher/rke2/bin/kubectl create namespace cattle-system --dry-run=client -o yaml | /var/lib/rancher/rke2/bin/kubectl  apply -f -
+      environment:
+        KUBECONFIG: "/etc/rancher/rke2/rke2.yaml"
+        PATH: "/var/lib/rancher/rke2/bin:{{ ansible_env.PATH }}"
+      when: inventory_hostname == groups['rke2'][0]
+    - name: Create cert-manager namespace
+      ansible.builtin.shell:
+        cmd: /var/lib/rancher/rke2/bin/kubectl create namespace cert-manager --dry-run=client -o yaml | /var/lib/rancher/rke2/bin/kubectl  apply -f -
+      environment:
+        KUBECONFIG: "/etc/rancher/rke2/rke2.yaml"
+        PATH: "/var/lib/rancher/rke2/bin:{{ ansible_env.PATH }}"
+      when: inventory_hostname == groups['rke2'][0]
+    - name: Create cert manager CRDs
+      ansible.builtin.shell:
+         cmd: /var/lib/rancher/rke2/bin/kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.19.1/cert-manager.crds.yaml
+      environment:
+        KUBECONFIG: "/etc/rancher/rke2/rke2.yaml"
+        PATH: "/var/lib/rancher/rke2/bin:{{ ansible_env.PATH }}"
+      when: inventory_hostname == groups['rke2'][0]
+
+    - name: Install cert manager
+      ansible.builtin.shell: >-
+        helm install cert-manager jetstack/cert-manager --namespace cert-manager --set crds.enabled=false
+      environment:
+        KUBECONFIG: "/etc/rancher/rke2/rke2.yaml"
+        PATH: "/var/lib/rancher/rke2/bin:{{ ansible_env.PATH }}"
+      when: inventory_hostname == groups['rke2'][0]
