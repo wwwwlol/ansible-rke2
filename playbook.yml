@@ -1,0 +1,46 @@
+- hosts: rke2
+  name: install rke2
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Ensure the /etc/rancher/rke2 directory exists
+      ansible.builtin.file:
+        path: "/etc/rancher/rke2"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+    - name: Create config file with token 'test' only on the first server
+      ansible.builtin.copy:
+        dest: "/etc/rancher/rke2/config.yaml"
+        content: |
+          token: test
+        owner: root
+        group: root
+        mode: '0600'
+      when: inventory_hostname == groups['rke2'][0]
+    - name: Install RKE2 sevrer on first node
+      ansible.builtin.shell:
+          cmd:  curl -sfL https://get.rke2.io | sh 
+          creates: /usr/local/bin/rke2
+    - name: Start RKE2 server on first node
+      ansible.builtin.service:
+          name: rke2-server
+          state: started
+      when: inventory_hostname == groups['rke2'][0]
+    - name: Create config file on secondary nodes
+      ansible.builtin.copy:
+        dest: "/etc/rancher/rke2/config.yaml"
+        content: |
+          token: test
+          server: https://{{ hostvars[groups['rke2'][0]]['ansible_default_ipv4']['address'] }}:9345
+        owner: root
+        group: root
+        mode: '0600'
+      when: inventory_hostname != groups['rke2'][0]
+    - name: Start RKE2 server service on secondary nodes
+      ansible.builtin.service:
+          name: rke2-server
+          state: started
+      when: inventory_hostname != groups['rke2'][0]
